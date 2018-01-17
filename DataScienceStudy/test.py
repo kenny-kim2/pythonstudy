@@ -1,9 +1,9 @@
 import tensorflow as tf
 import matplotlib.image as mpimage
+import matplotlib.pyplot as plt
 import numpy as np
 
+img = mpimage.imread('../paint/1-1.jpg')
 
-data = np.random.normal(scale = 10, size=(10,10))
-dataresult = tf.reshape(data, (2, 5, 10))
-
-print(dataresult)
+localplt = plt.imshow(img)
+plt.show(localplt)
