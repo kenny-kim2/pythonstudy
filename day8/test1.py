@@ -5,7 +5,7 @@ import sys
 
 # 스크립트가 받을 옵션과 기본값 설정
 tf.app.flags.DEFINE_string('output_graph', './workspace/flowers_graph.pb','학습된 신경망이 저장되는 위치')
-tf.app.flags.DEFINE_string('output_label', './workspace/flowers_label.txt', '학습할 레이블 데이터 파일')
+tf.app.flags.DEFINE_string('output_label', './workspace/flowers_labels.txt', '학습할 레이블 데이터 파일')
 tf.app.flags.DEFINE_boolean('show_image', True, '이미지 추론 후 이미지를 보여줍니다.')
 
 FLAGS = tf.app.flags.FLAGS
