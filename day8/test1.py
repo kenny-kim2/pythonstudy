@@ -19,7 +19,7 @@ FLAGS = tf.app.flags.FLAGS
 
 def main(_):
     labels = [line.rstrip() for line in tf.gfile.GFile(FLAGS.output_label)]
-    with tf.gfile.FastGFile(FLAGS.output_graph, 'rb') as fp
+    with tf.gfile.FastGFile(FLAGS.output_graph, 'rb') as fp:
         graph_def = tf.GraphDef()
         graph_def.ParseFromString(fp.read())
         tf.import_graph_def(graph_def, name='')
