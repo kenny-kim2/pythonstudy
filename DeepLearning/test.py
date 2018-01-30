@@ -15,8 +15,13 @@
 #     print(sess.run(arg1, feed_dict={X: data}))
 #     print()
 #     print(sess.run(arg2, feed_dict={X: data}))
-import re
 
-for i in range(10):
-    fn = lambda i :float(i) if re.match(r'^[0-9\.]+$', str(i)) else i
-    print(fn)
+# import re
+#
+# for i in range(10):
+#     fn = lambda i :float(i) if re.match(r'^[0-9\.]+$', str(i)) else i
+#     print(fn)
+
+
+import site
+print(site.getsitepackages())
