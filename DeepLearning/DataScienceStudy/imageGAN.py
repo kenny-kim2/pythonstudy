@@ -3,6 +3,8 @@ import matplotlib.pyplot as plt
 import matplotlib.image as mpimage
 import numpy as np
 import time
+# import os
+# os.environ["CUDA_VISIBLE_DEVICES"]="-1"
 
 start = time.time()
 
@@ -10,17 +12,20 @@ img = mpimage.imread('../paint/8-1.jpg')
 
 # 고흐 데이터
 test1data = tf.convert_to_tensor(img, np.float32)
+print(test1data)
 
 img2 = mpimage.imread('../paint/test-1.jpg')
+print(img2)
 
 # 실제 사진 데이터
 resultdata = tf.convert_to_tensor(img2, np.float32)
+print(resultdata)
 
 # 하이퍼 파라미터
 total_epoch = 10000
-learning_rate = 0.00001
-n_hidden1 = 1400
-n_hidden2 = 300
+learning_rate = 0.0001
+n_hidden1 = 100
+n_hidden2 = 5000
 n_input = 200 * 200 * 3
 n_input2 = 13 * 13 * 64
 n_noise = 200 * 200 * 3
@@ -38,10 +43,10 @@ global_step3 = tf.Variable(0, trainable=False, name='global_step3')
 
 # 데이터 생성자 변수
 with tf.name_scope('Generator_Variable'):
-    G_W1 = tf.Variable(tf.random_normal([n_noise, n_hidden1], stddev=0.01))
+    G_W1 = tf.Variable(tf.random_normal([n_noise, n_hidden1], stddev=0.1))
     G_b1 = tf.Variable(tf.zeros([n_hidden1]))
 
-    G_W2 = tf.Variable(tf.random_normal([n_hidden1, n_input], stddev=0.01))
+    G_W2 = tf.Variable(tf.random_normal([n_hidden1, n_input], stddev=0.1))
     G_b2 = tf.Variable(tf.zeros([n_input]))
 
 # 데이터 구분자 변수
@@ -58,13 +63,17 @@ with tf.name_scope('Discriminator_Variable'):
 
 # 데이터 생성자 신경망 구성
 def generator(noise_z):
-    with tf.name_scope('generator'):
-        hidden = tf.nn.relu(tf.matmul(noise_z, G_W1) + G_b1)
-        output = tf.nn.sigmoid(tf.matmul(hidden, G_W2) + G_b2)
-        return output
+    print('generator')
+    with tf.device('/cpu:0'):
+        with tf.name_scope('generator'):
+            hidden = tf.nn.relu(tf.matmul(noise_z, G_W1) + G_b1)
+            output = tf.nn.sigmoid(tf.matmul(hidden, G_W2) + G_b2)
+            return output
 
 # 데이터 구분자 신경망 구성
 def discriminator(inputs):
+    # print('discriminator')
+    # with tf.device('/cpu:0'):
     with tf.name_scope('Discriminator'):
         # 이미지 하나를 학습 하기때문에 1
         inputs_reshape = tf.reshape(inputs, [1, 200, 200, 3])
@@ -96,6 +105,7 @@ def discriminator(inputs):
 
 # 무작위 노이즈 생성
 def get_noise(n_noise):
+    # print('noise')
     with tf.name_scope('Make_noise'):
         return np.random.normal(size=(n_noise))
 
@@ -118,11 +128,14 @@ with tf.name_scope('Cost'):
     G_var_list = [G_W1, G_b1, G_W2, G_b2]
 
 with tf.name_scope('Train'):
-    train_D1 = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(-loss_D1, var_list=D_var_list, global_step=global_step1)
-    train_D2 = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(-loss_D2, var_list=D_var_list, global_step=global_step2)
-    train_G = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(-loss_G, var_list=G_var_list, global_step=global_step3)
+    train_D1 = tf.train.RMSPropOptimizer(learning_rate=learning_rate).minimize(-loss_D1, var_list=D_var_list, global_step=global_step1)
+    train_D2 = tf.train.RMSPropOptimizer(learning_rate=learning_rate).minimize(-loss_D2, var_list=D_var_list, global_step=global_step2)
+    train_G = tf.train.RMSPropOptimizer(learning_rate=learning_rate).minimize(-loss_G, var_list=G_var_list, global_step=global_step3)
+
+# config.gpu_options.per_process_gpu_memory_fraction = 0.1
 
 with tf.Session() as sess:
+    # print('create session')
     saver = tf.train.Saver(tf.global_variables())
 
     check_path = tf.train.get_checkpoint_state('./model'+str(selected_version))
@@ -131,11 +144,13 @@ with tf.Session() as sess:
     else:
         sess.run(tf.global_variables_initializer())
     # sess.run(tf.global_variables_initializer())
+    # print('saver check')
 
     merged = tf.summary.merge_all()
     writer = tf.summary.FileWriter('./log'+str(version), sess.graph)
 
     loss_val_D, loss_val_G = 0, 0
+    print('loss_val_D')
 
     # for epoch in range(total_epoch):
     #     noise = get_noise(n_noise)
@@ -150,6 +165,7 @@ with tf.Session() as sess:
     # exit(0)
 
     for epoch in range(total_epoch):
+        # print('epoch', str(epoch))
         local_time = time.time()
         noise = get_noise(n_noise)
         # print(epoch)
@@ -159,12 +175,11 @@ with tf.Session() as sess:
         # print(sess.run(loss_D, feed_dict={X: np.reshape(imgdata.eval(), (1, n_input)) / 255, Z: np.reshape(noise, (1, n_noise)) / 255}))
         # print(sess.run(loss_G, feed_dict={X: np.reshape(imgdata.eval(), (1, n_input)) / 255, Z: np.reshape(noise, (1, n_noise)) / 255}))
 
-        _, loss_val_D1 = sess.run([train_D1, loss_D1], feed_dict={X1: np.reshape(test1data.eval(), (1, n_input)) / 255, X2: np.reshape(resultdata.eval(), (1, n_input)) / 255, Z: np.reshape(noise, (1, n_noise))/255, keep_prob: 0.8})
-        _, loss_val_D2 = sess.run([train_D2, loss_D2], feed_dict={X1: np.reshape(test1data.eval(), (1, n_input)) / 255, X2: np.reshape(resultdata.eval(), (1, n_input)) / 255, Z: np.reshape(noise, (1, n_noise)) / 255, keep_prob: 0.8})
-        _, loss_val_G = sess.run([train_G, loss_G], feed_dict={Z: np.reshape(noise, (1, n_noise))/255, keep_prob: 0.8})
-        print('epoch:', '%d' % sess.run(global_step1), 'loss_val_D1:', loss_val_D1, 'loss_val_D2:', loss_val_D2, 'loss_val_G:', loss_val_G, '소요시간:', time.time() - local_time, 's')
+        _, loss_val_D1 = sess.run([train_D1, loss_D1], feed_dict={X1: np.reshape(test1data.eval(), (1, n_input)) / 255, X2: np.reshape(resultdata.eval(), (1, n_input)) / 255, Z: np.reshape(noise, (1, n_noise))/255, keep_prob: 0.9})
+        _, loss_val_D2 = sess.run([train_D2, loss_D2], feed_dict={X1: np.reshape(test1data.eval(), (1, n_input)) / 255, X2: np.reshape(resultdata.eval(), (1, n_input)) / 255, Z: np.reshape(noise, (1, n_noise)) / 255, keep_prob: 0.9})
+        _, loss_val_G = sess.run([train_G, loss_G], feed_dict={Z: np.reshape(noise, (1, n_noise))/255, keep_prob: 0.9})
 
-        summary = sess.run(merged, feed_dict={X1: np.reshape(test1data.eval(), (1, n_input)) / 255, X2: np.reshape(resultdata.eval(), (1, n_input)) / 255, Z: np.reshape(noise, (1, n_noise))/255, keep_prob: 0.6})
+        summary = sess.run(merged, feed_dict={X1: np.reshape(test1data.eval(), (1, n_input)) / 255, X2: np.reshape(resultdata.eval(), (1, n_input)) / 255, Z: np.reshape(noise, (1, n_noise))/255, keep_prob: 0.9})
         writer.add_summary(summary, global_step=sess.run(global_step1))
 
         if epoch % 10 == 0:
@@ -176,11 +191,13 @@ with tf.Session() as sess:
 
             plt.close()
 
+        print('epoch:', '%d' % sess.run(global_step1), 'loss_val_D1:', loss_val_D1, 'loss_val_D2:', loss_val_D2, 'loss_val_G:', loss_val_G, '소요시간:', time.time() - local_time, 's')
+
     noise = get_noise(n_noise)
     returndata = sess.run(G, feed_dict={Z: np.reshape(noise, (1, n_noise)) / 255})
 
     plt.imshow(np.reshape(returndata, (200, 200, 3)) * 255)
-    plt.savefig('sample' + str(version) + '/last.png', bbox_inches='tight')
+    plt.savefig('sample' + str(version) + '/last'+str(sess.run(global_step1)/1000)+'.png', bbox_inches='tight')
 
     plt.close()
 
