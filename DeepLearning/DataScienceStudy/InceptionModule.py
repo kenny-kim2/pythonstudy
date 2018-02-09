@@ -110,6 +110,8 @@ import re
 import sys
 import tarfile
 
+import urllib.request
+
 import numpy as np
 from six.moves import urllib
 import tensorflow as tf
@@ -122,13 +124,13 @@ from tensorflow.python.util import compat
 
 class InceptionModule:
 
-    def __init__(self, architecture='inception_v3', bottleneck_dir='/tmp/bottleneck',
+    def __init__(self, architecture='inception_v3', bottleneck_dir='./inception/bottleneck',
                  eval_step_interval=10, final_tensor_name='final_result', flip_left_right=False,
-                 how_many_training_steps=4000, image_dir='', intermediate_output_graphs_dir='/tmp/intermediate_graph/',
-                 intermediate_store_frequency=0, learning_rate=0.01, model_dir='/tmp/imagenet', output_graph='/tmp/output_graph.pb',
-                 output_labels='/tmp/output_labels.txt', print_misclassified_test_images=False, random_brightness=0,
-                 random_crop=0, random_scale=0, summaries_dir='/tmp/retrain_logs', test_batch_size=-1, testing_percentage=10,
-                 train_batch_size=100, validation_batch_size=100, validation_percentage=10 ):
+                 how_many_training_steps=1000, image_dir='', intermediate_output_graphs_dir='./inception/intermediate_graph/',
+                 intermediate_store_frequency=0, learning_rate=0.01, model_dir='./inception/imagenet', output_graph='./inception/output_graph.pb',
+                 output_labels='./inception/output_labels.txt', print_misclassified_test_images=False, random_brightness=0,
+                 random_crop=0, random_scale=0, summaries_dir='./inception/retrain_logs', test_batch_size=-1, testing_percentage=10,
+                 train_batch_size=500, validation_batch_size=100, validation_percentage=10, check_point_path='./inception/checkpoint', main_path='./inception'):
         self.architecture = architecture
         self.bottleneck_dir = bottleneck_dir
         self.eval_step_interval = eval_step_interval
@@ -155,74 +157,78 @@ class InceptionModule:
 
         self.MAX_NUM_IMAGES_PER_CLASS = 2 ** 27 - 1  # ~134M
 
-    def create_image_lists(self, image_dir, testing_percentage, validation_percentage):
-        if not gfile.Exists(image_dir):
-            tf.logging.error("Image directory '" + image_dir + "' not found.")
-            return None
-        result = {}
-        sub_dirs = [x[0] for x in gfile.Walk(image_dir)]
-        # The root directory comes first, so skip it.
-        is_root_dir = True
-        for sub_dir in sub_dirs:
-            if is_root_dir:
-                is_root_dir = False
-                continue
-            extensions = ['jpg', 'jpeg', 'JPG', 'JPEG']
-            file_list = []
-            dir_name = os.path.basename(sub_dir)
-            if dir_name == image_dir:
-                continue
-            tf.logging.info("Looking for images in '" + dir_name + "'")
-            for extension in extensions:
-                file_glob = os.path.join(image_dir, dir_name, '*.' + extension)
-                file_list.extend(gfile.Glob(file_glob))
-            if not file_list:
-                tf.logging.warning('No files found')
-                continue
-            if len(file_list) < 20:
-                tf.logging.warning(
-                    'WARNING: Folder has less than 20 images, which may cause issues.')
-            elif len(file_list) > self.MAX_NUM_IMAGES_PER_CLASS:
-                tf.logging.warning(
-                    'WARNING: Folder {} has more than {} images. Some images will '
-                    'never be selected.'.format(dir_name, self.MAX_NUM_IMAGES_PER_CLASS))
-            label_name = re.sub(r'[^a-z0-9]+', ' ', dir_name.lower())
-            training_images = []
-            testing_images = []
-            validation_images = []
-            for file_name in file_list:
-                base_name = os.path.basename(file_name)
-                # We want to ignore anything after '_nohash_' in the file name when
-                # deciding which set to put an image in, the data set creator has a way of
-                # grouping photos that are close variations of each other. For example
-                # this is used in the plant disease data set to group multiple pictures of
-                # the same leaf.
-                hash_name = re.sub(r'_nohash_.*$', '', file_name)
-                # This looks a bit magical, but we need to decide whether this file should
-                # go into the training, testing, or validation sets, and we want to keep
-                # existing files in the same set even if more files are subsequently
-                # added.
-                # To do that, we need a stable way of deciding based on just the file name
-                # itself, so we do a hash of that and then use that to generate a
-                # probability value that we use to assign it.
-                hash_name_hashed = hashlib.sha1(compat.as_bytes(hash_name)).hexdigest()
-                percentage_hash = ((int(hash_name_hashed, 16) %
-                                    (self.MAX_NUM_IMAGES_PER_CLASS + 1)) *
-                                   (100.0 / self.MAX_NUM_IMAGES_PER_CLASS))
-                if percentage_hash < validation_percentage:
-                    validation_images.append(base_name)
-                elif percentage_hash < (testing_percentage + validation_percentage):
-                    testing_images.append(base_name)
-                else:
-                    training_images.append(base_name)
-            result[label_name] = {
-                'dir': dir_name,
-                'training': training_images,
-                'testing': testing_images,
-                'validation': validation_images,
-            }
-        return result
+        # 학습 모델 저장
+        self.check_point_path = check_point_path
+        self.main_path = main_path
 
+        if not os.path.exists(main_path):
+            print('not exist main_path')
+            self.init_data()
+        else:
+            try:
+                with gfile.FastGFile(main_path+'/label_size.txt', 'r') as f:
+                    self.label_size = int(f.read())
+            except Exception as e:
+                self.init_data()
+
+        print('inception load OK')
+
+
+    def create_image_lists(self, train_list, test_list, validation_list):
+        # 수정 사항
+        # 원본은 이미지 파일을 체크하여 레이블과 이미지 디렉토리 path 넘김
+        # 이미지 url을 체크하여 존재하는 이미지 url만 처리하도록 수정
+        # 우선적으로 파일에서 읽도록 처리, 추후에 DB에서 조회하도록 수정 필요
+        # 테스트 데이터, 중간 체크 데이터 파일로 구분하도록 수정
+
+        result = {}
+
+        for image in train_list.keys():
+            label = train_list[image]
+            if label not in result.keys():
+                training_images = []
+                testing_images = []
+                validation_images = []
+                result[label] = {
+                    'training': training_images,
+                    'testing': testing_images,
+                    'validation': validation_images,
+                }
+            checkdata = result[label]
+            checkdata['training'].append(image)
+            result[label] = checkdata
+
+        for image in test_list.keys():
+            label = test_list[image]
+            if label not in result.keys():
+                training_images = []
+                testing_images = []
+                validation_images = []
+                result[label] = {
+                    'training': training_images,
+                    'testing': testing_images,
+                    'validation': validation_images,
+                }
+            checkdata = result[label]
+            checkdata['testing'].append(image)
+            result[label] = checkdata
+
+        for image in validation_list.keys():
+            label = validation_list[image]
+            if label not in result.keys():
+                training_images = []
+                testing_images = []
+                validation_images = []
+                result[label] = {
+                    'training': training_images,
+                    'testing': testing_images,
+                    'validation': validation_images,
+                }
+            checkdata = result[label]
+            checkdata['validation'].append(image)
+            result[label] = checkdata
+
+        return result
 
     def get_image_path(self, image_lists, label_name, index, image_dir, category):
         """" Returns a path to an image for a label at the given index.
@@ -254,8 +260,7 @@ class InceptionModule:
         full_path = os.path.join(image_dir, sub_dir, base_name)
         return full_path
 
-    def get_bottleneck_path(self, image_lists, label_name, index, bottleneck_dir,
-                            category, architecture):
+    def get_bottleneck_path(self, bottleneck_dir, label_name, index, category, architecture):
         """" Returns a path to a bottleneck file for a label at the given index.
         Args:
             image_lists: Dictionary of training images for each label.
@@ -270,7 +275,7 @@ class InceptionModule:
         Returns:
             File system path string to an image that meets the requested parameters.
         """
-        return self.get_image_path(image_lists, label_name, index, bottleneck_dir, category) + '_' + architecture + '.txt'
+        return bottleneck_dir + '/' + label_name + '_' + str(index) + '_' + category + '_' + architecture + '.txt'
 
     def create_model_graph(self, model_info):
         """" Creates a graph from saved GraphDef file and returns a Graph object.
@@ -284,7 +289,6 @@ class InceptionModule:
         """
         with tf.Graph().as_default() as graph:
             model_path = os.path.join(self.model_dir, model_info['model_file_name'])
-            print('Model path: ', model_path)
             with gfile.FastGFile(model_path, 'rb') as f:
                 graph_def = tf.GraphDef()
                 graph_def.ParseFromString(f.read())
@@ -344,15 +348,11 @@ class InceptionModule:
                 sys.stdout.flush()
 
             filepath, _ = urllib.request.urlretrieve(data_url, filepath, _progress)
-            print()
             statinfo = os.stat(filepath)
-            tf.logging.info('Successfully downloaded', filename, statinfo.st_size,
-                            'bytes.')
-            print('Extracting file from ', filepath)
+            tf.logging.info('Successfully downloaded', str(filename), str(statinfo.st_size), 'bytes.')
             tarfile.open(filepath, 'r:gz').extractall(dest_directory)
         else:
             print('Not extracting or downloading files, model already present in disk')
-
 
     def ensure_dir_exists(self, dir_name):
         """ Makes sure the folder exists on disk.
@@ -365,30 +365,32 @@ class InceptionModule:
 
     bottleneck_path_2_bottleneck_values = {}
 
-    def create_bottleneck_file(self, bottleneck_path, image_lists, label_name, index,
-                               image_dir, category, sess, jpeg_data_tensor,
+    def create_bottleneck_file(self, bottleneck_path, image_url, sess, jpeg_data_tensor,
                                decoded_image_tensor, resized_input_tensor,
                                bottleneck_tensor):
         """Create a single bottleneck file."""
         tf.logging.info('Creating bottleneck at ' + bottleneck_path)
-        image_path = self.get_image_path(image_lists, label_name, index,
-                                    image_dir, category)
-        if not gfile.Exists(image_path):
-            tf.logging.fatal('File does not exist %s', image_path)
-        image_data = gfile.FastGFile(image_path, 'rb').read()
+        # 이미지 데이터 파일 조회 -> url 조회로 변경
+
+        try:
+            req = urllib.request.Request(image_url)
+            response = urllib.request.urlopen(req)
+            image_data = response.read()
+        except Exception as e:
+            print(image_url)
+            exit()
+
         try:
             bottleneck_values = self.run_bottleneck_on_image(
                 sess, image_data, jpeg_data_tensor, decoded_image_tensor,
                 resized_input_tensor, bottleneck_tensor)
         except Exception as e:
-            raise RuntimeError('Error during processing file %s (%s)' % (image_path,
-                                                                         str(e)))
+            raise RuntimeError('Error during processing file %s (%s)' % (image_url, str(e)))
         bottleneck_string = ','.join(str(x) for x in bottleneck_values)
         with open(bottleneck_path, 'w') as bottleneck_file:
             bottleneck_file.write(bottleneck_string)
 
-    def get_or_create_bottleneck(self, sess, image_lists, label_name, index, image_dir,
-                                 category, bottleneck_dir, jpeg_data_tensor,
+    def get_or_create_bottleneck(self, sess, label_name, index, image_url, category, bottleneck_dir, jpeg_data_tensor,
                                  decoded_image_tensor, resized_input_tensor,
                                  bottleneck_tensor, architecture):
         """ Retrieves or calculates bottleneck values for an image.
@@ -414,16 +416,14 @@ class InceptionModule:
         Returns:
             Numpy array of values produced by the bottleneck layer for the image.
         """
-        label_lists = image_lists[label_name]
-        sub_dir = label_lists['dir']
-        sub_dir_path = os.path.join(bottleneck_dir, sub_dir)
-        self.ensure_dir_exists(sub_dir_path)
-        bottleneck_path = self.get_bottleneck_path(image_lists, label_name, index, bottleneck_dir, category, architecture)
+
+        # 이미지 사용을 위하여 이미지 데이터 로드 하는부분 수정
+        bottleneck_path = self.get_bottleneck_path(bottleneck_dir, label_name, index, category, architecture)
+
         if not os.path.exists(bottleneck_path):
-            self.create_bottleneck_file(bottleneck_path, image_lists, label_name, index,
-                                   image_dir, category, sess, jpeg_data_tensor,
-                                   decoded_image_tensor, resized_input_tensor,
-                                   bottleneck_tensor)
+            self.create_bottleneck_file(bottleneck_path, image_url, sess, jpeg_data_tensor,
+                                        decoded_image_tensor, resized_input_tensor,
+                                        bottleneck_tensor)
         with open(bottleneck_path, 'r') as bottleneck_file:
             bottleneck_string = bottleneck_file.read()
         did_hit_error = False
@@ -433,10 +433,9 @@ class InceptionModule:
             tf.logging.warning('Invalid float found, recreating bottleneck')
             did_hit_error = True
         if did_hit_error:
-            self.create_bottleneck_file(bottleneck_path, image_lists, label_name, index,
-                                   image_dir, category, sess, jpeg_data_tensor,
-                                   decoded_image_tensor, resized_input_tensor,
-                                   bottleneck_tensor)
+            self.create_bottleneck_file(bottleneck_path, image_url, sess, jpeg_data_tensor,
+                                        decoded_image_tensor, resized_input_tensor,
+                                        bottleneck_tensor)
             with open(bottleneck_path, 'r') as bottleneck_file:
                 bottleneck_string = bottleneck_file.read()
             # Allow exceptions to propagate here, since they shouldn't happen after a
@@ -444,8 +443,7 @@ class InceptionModule:
             bottleneck_values = [float(x) for x in bottleneck_string.split(',')]
         return bottleneck_values
 
-
-    def cache_bottlenecks(self, sess, image_lists, image_dir, bottleneck_dir,
+    def cache_bottlenecks(self, sess, image_lists, bottleneck_dir,
                           jpeg_data_tensor, decoded_image_tensor,
                           resized_input_tensor, bottleneck_tensor, architecture):
         """ Ensures all the training, testing, and validation bottlenecks are cached.
@@ -478,17 +476,16 @@ class InceptionModule:
                 category_list = label_lists[category]
                 for index, unused_base_name in enumerate(category_list):
                     self.get_or_create_bottleneck(
-                        sess, image_lists, label_name, index, image_dir, category,
+                        sess, label_name, index, unused_base_name, category,
                         bottleneck_dir, jpeg_data_tensor, decoded_image_tensor,
                         resized_input_tensor, bottleneck_tensor, architecture)
                     how_many_bottlenecks += 1
                     if how_many_bottlenecks % 100 == 0:
-                        tf.logging.info(
-                            str(how_many_bottlenecks) + ' bottleneck files created.')
+                        tf.logging.info(str(how_many_bottlenecks) + ' bottleneck files created.')
 
 
     def get_random_cached_bottlenecks(self, sess, image_lists, how_many, category,
-                                      bottleneck_dir, image_dir, jpeg_data_tensor,
+                                      bottleneck_dir, jpeg_data_tensor,
                                       decoded_image_tensor, resized_input_tensor,
                                       bottleneck_tensor, architecture):
         """ Retrieves bottleneck values for cached images.
@@ -517,37 +514,33 @@ class InceptionModule:
         class_count = len(image_lists.keys())
         bottlenecks = []
         ground_truths = []
-        filenames = []
         if how_many >= 0:
             # Retrieve a random sample of bottlenecks.
             for unused_i in range(how_many):
                 label_index = random.randrange(class_count)
                 label_name = list(image_lists.keys())[label_index]
-                image_index = random.randrange(self.MAX_NUM_IMAGES_PER_CLASS + 1)
-                image_name = self.get_image_path(image_lists, label_name, image_index,
-                                            image_dir, category)
+
+                image_index = random.randrange(len(image_lists[label_name][category]))
                 bottleneck = self.get_or_create_bottleneck(
-                    sess, image_lists, label_name, image_index, image_dir, category,
+                    sess, label_name, image_index, image_lists[label_name][category][image_index], category,
                     bottleneck_dir, jpeg_data_tensor, decoded_image_tensor,
                     resized_input_tensor, bottleneck_tensor, architecture)
+
                 bottlenecks.append(bottleneck)
                 ground_truths.append(label_index)
-                filenames.append(image_name)
+
         else:
             # Retrieve all bottlenecks.
             for label_index, label_name in enumerate(image_lists.keys()):
-                for image_index, image_name in enumerate(
-                        image_lists[label_name][category]):
-                    image_name = self.get_image_path(image_lists, label_name, image_index,
-                                                image_dir, category)
+                for image_index, image_name in enumerate(image_lists[label_name][category]):
                     bottleneck = self.get_or_create_bottleneck(
-                        sess, image_lists, label_name, image_index, image_dir, category,
+                        sess, label_name, image_index, image_name, category,
                         bottleneck_dir, jpeg_data_tensor, decoded_image_tensor,
                         resized_input_tensor, bottleneck_tensor, architecture)
                     bottlenecks.append(bottleneck)
                     ground_truths.append(label_index)
-                    filenames.append(image_name)
-        return bottlenecks, ground_truths, filenames
+
+        return bottlenecks, ground_truths
 
 
     def get_random_distorted_bottlenecks(
@@ -756,6 +749,8 @@ class InceptionModule:
             ground_truth_input = tf.placeholder(
                 tf.int64, [None], name='GroundTruthInput')
 
+            global_step = tf.Variable(0, trainable=False, name='global_step')
+
         # Organizing the following ops as `final_training_ops` so they're easier
         #  to see in TensorBoard
         layer_name = 'final_training_ops'
@@ -805,10 +800,10 @@ class InceptionModule:
 
         with tf.name_scope('train'):
             optimizer = tf.train.GradientDescentOptimizer(self.learning_rate)
-            train_step = optimizer.minimize(cross_entropy_mean)
+            train_step = optimizer.minimize(cross_entropy_mean, global_step=global_step)
 
         return (train_step, cross_entropy_mean, bottleneck_input, ground_truth_input,
-                final_tensor)
+                final_tensor, global_step)
 
 
     def add_evaluation_step(self, result_tensor, ground_truth_tensor):
@@ -984,15 +979,7 @@ class InceptionModule:
         mul_image = tf.multiply(offset_image, 1.0 / input_std)
         return jpeg_data, mul_image
 
-
-    def start(self):
-        # Needed to make sure the logging output is visible.
-        #  See https://github.com/tensorflow/tensorflow/issues/3047
-        tf.logging.set_verbosity(tf.logging.INFO)
-
-        # Prepare necessary directories that can be used during training
-        self.prepare_file_system()
-
+    def init_model(self):
         # Gather information about the model architecture we'll be using.
         model_info = self.create_model_info(self.architecture)
         if not model_info:
@@ -1001,12 +988,25 @@ class InceptionModule:
 
         # Set up the pre-trained graph.
         self.maybe_download_and_extract(model_info['data_url'])
-        graph, bottleneck_tensor, resized_image_tensor = (
-            self.create_model_graph(model_info))
 
-        # Look at the folder structure, and create lists of all the images.
-        image_lists = self.create_image_lists(self.image_dir, self.testing_percentage,
-                                              self.validation_percentage)
+    def train(self, image_lists, is_init_data=False):
+        print('train start =', str(len(image_lists)))
+        '''
+        학습 로직
+        :param image_lists: 학습 이미지 데이터(create_image_lists을 이용해서 생성)
+        :param is_init_data: 초기화일 경우 label명을 파일에 써야하기 때문에 초기화일 경우 True
+        :return:
+        '''
+        # Gather information about the model architecture we'll be using.
+        model_info = self.create_model_info(self.architecture)
+        if not model_info:
+            tf.logging.error('Did not recognize architecture flag')
+            return -1
+
+        # Set up the pre-trained graph.
+        self.maybe_download_and_extract(model_info['data_url'])
+
+        graph, bottleneck_tensor, resized_image_tensor = (self.create_model_graph(model_info))
         class_count = len(image_lists.keys())
         if class_count == 0:
             tf.logging.error('No valid folders of images found at ' + self.image_dir)
@@ -1017,37 +1017,25 @@ class InceptionModule:
                              ' - multiple classes are needed for classification.')
             return -1
 
-        # See if the command-line flags mean we're applying any distortions.
-        do_distort_images = self.should_distort_images(
-            self.flip_left_right, self.random_crop, self.random_scale,
-            self.random_brightness)
-
         with tf.Session(graph=graph) as sess:
             # Set up the image decoding sub-graph.
             jpeg_data_tensor, decoded_image_tensor = self.add_jpeg_decoding(
                 model_info['input_width'], model_info['input_height'],
                 model_info['input_depth'], model_info['input_mean'],
                 model_info['input_std'])
-            if do_distort_images:
-                # We will be applying distortions, so setup the operations we'll need.
-                (distorted_jpeg_data_tensor,
-                 distorted_image_tensor) = self.add_input_distortions(
-                    self.flip_left_right, self.random_crop, self.random_scale,
-                    self.random_brightness, model_info['input_width'],
-                    model_info['input_height'], model_info['input_depth'],
-                    model_info['input_mean'], model_info['input_std'])
-            else:
-                # We'll make sure we've calculated the 'bottleneck' image summaries and
-                # cached them on disk.
-                self.cache_bottlenecks(sess, image_lists, self.image_dir,
-                                       self.bottleneck_dir, jpeg_data_tensor,
-                                       decoded_image_tensor, resized_image_tensor,
-                                       bottleneck_tensor, self.architecture)
+
+            # We'll make sure we've calculated the 'bottleneck' image summaries and
+            # cached them on disk.
+            self.cache_bottlenecks(sess, image_lists,
+                                   self.bottleneck_dir, jpeg_data_tensor,
+                                   decoded_image_tensor, resized_image_tensor,
+                                   bottleneck_tensor, self.architecture)
 
             # Add the new layer that we'll be training.
-            (train_step, cross_entropy, bottleneck_input, ground_truth_input, final_tensor) = self.add_final_training_ops(
+            (train_step, cross_entropy, bottleneck_input, ground_truth_input, final_tensor, global_step) = self.add_final_training_ops(
                 len(image_lists.keys()), self.final_tensor_name, bottleneck_tensor,
                 model_info['bottleneck_tensor_size'], model_info['quantize_layer'])
+
             # Create the operations we need to evaluate the accuracy of our new layer.
             evaluation_step, prediction = self.add_evaluation_step(
                 final_tensor, ground_truth_input)
@@ -1060,31 +1048,30 @@ class InceptionModule:
             validation_writer = tf.summary.FileWriter(self.summaries_dir + '/validation')
 
             # Set up all our weights to their initial default values.
-            init = tf.global_variables_initializer()
-            sess.run(init)
+            check_point = tf.train.get_checkpoint_state(self.check_point_path)
+            saver = tf.train.Saver(tf.global_variables())
+            if check_point and tf.train.checkpoint_exists(check_point.model_checkpoint_path) and not is_init_data:
+                saver.restore(sess, check_point.model_checkpoint_path)
+            else:
+                sess.run(tf.global_variables_initializer())
 
             # Run the training for as many cycles as requested on the command line.
             for i in range(self.how_many_training_steps):
                 # Get a batch of input bottleneck values, either calculated fresh every
                 #  time with distortions applied, or from the cache stored on disk.
-                if do_distort_images:
-                    (train_bottlenecks, train_ground_truth) = self.get_random_distorted_bottlenecks(
+                (train_bottlenecks, train_ground_truth) = self.get_random_cached_bottlenecks(
                         sess, image_lists, self.train_batch_size, 'training',
-                        self.image_dir, distorted_jpeg_data_tensor,
-                        distorted_image_tensor, resized_image_tensor, bottleneck_tensor)
-                else:
-                    (train_bottlenecks,
-                     train_ground_truth, _) = self.get_random_cached_bottlenecks(
-                        sess, image_lists, self.train_batch_size, 'training',
-                        self.bottleneck_dir, self.image_dir, jpeg_data_tensor,
+                        self.bottleneck_dir, jpeg_data_tensor,
                         decoded_image_tensor, resized_image_tensor, bottleneck_tensor,
                         self.architecture)
+
                 # Feed the bottlenecks and ground truth into the graph, and run a training
                 # step. Capture training summaries for TensorBoard with the `merged` op.
                 train_summary, _ = sess.run(
                     [merged, train_step],
                     feed_dict={bottleneck_input: train_bottlenecks,
                                ground_truth_input: train_ground_truth})
+
                 train_writer.add_summary(train_summary, i)
 
                 # Every so often, print out how well the graph is training.
@@ -1097,17 +1084,17 @@ class InceptionModule:
                     tf.logging.info('%s: Step %d: Train accuracy = %.1f%%' %
                                     (datetime.now(), i, train_accuracy * 100))
                     tf.logging.info('%s: Step %d: Cross entropy = %f' %
-                                    (datetime.now(), i, cross_entropy_value))
-                    validation_bottlenecks, validation_ground_truth, _ = (
+                                    (datetime.now(), sess.run(global_step), cross_entropy_value))
+                    validation_bottlenecks, validation_ground_truth = (
                         self.get_random_cached_bottlenecks(
                             sess, image_lists, self.validation_batch_size, 'validation',
-                            self.bottleneck_dir, self.image_dir, jpeg_data_tensor,
+                            self.bottleneck_dir, jpeg_data_tensor,
                             decoded_image_tensor, resized_image_tensor, bottleneck_tensor,
                             self.architecture))
                     # Run a validation step and capture training summaries for TensorBoard
                     # with the `merged` op.
-                    validation_summary, validation_accuracy = sess.run(
-                        [merged, evaluation_step],
+                    validation_summary, validation_accuracy, prediction_result = sess.run(
+                        [merged, evaluation_step, prediction],
                         feed_dict={bottleneck_input: validation_bottlenecks,
                                    ground_truth_input: validation_ground_truth})
                     validation_writer.add_summary(validation_summary, i)
@@ -1127,212 +1114,175 @@ class InceptionModule:
 
             # We've completed all our training, so run a final test evaluation on
             # some new images we haven't used before.
-            test_bottlenecks, test_ground_truth, test_filenames = (
+            test_bottlenecks, test_ground_truth = (
                 self.get_random_cached_bottlenecks(
                     sess, image_lists, self.test_batch_size, 'testing',
-                    self.bottleneck_dir, self.image_dir, jpeg_data_tensor,
+                    self.bottleneck_dir, jpeg_data_tensor,
                     decoded_image_tensor, resized_image_tensor, bottleneck_tensor,
                     self.architecture))
-            test_accuracy, predictions = sess.run(
-                [evaluation_step, prediction],
+            test_accuracy = sess.run(
+                evaluation_step,
                 feed_dict={bottleneck_input: test_bottlenecks,
                            ground_truth_input: test_ground_truth})
             tf.logging.info('Final test accuracy = %.1f%% (N=%d)' %
                             (test_accuracy * 100, len(test_bottlenecks)))
 
-            if self.print_misclassified_test_images:
-                tf.logging.info('=== MISCLASSIFIED TEST IMAGES ===')
-                for i, test_filename in enumerate(test_filenames):
-                    if predictions[i] != test_ground_truth[i]:
-                        tf.logging.info('%70s  %s' %
-                                        (test_filename,
-                                         list(image_lists.keys())[predictions[i]]))
-            # Write out the trained graph and labels with the weights stored as
-            # constants.
             self.save_graph_to_file(sess, graph, self.output_graph)
-            with gfile.FastGFile(self.output_labels, 'w') as f:
-                f.write('\n'.join(image_lists.keys()) + '\n')
+
+            if is_init_data:
+                with gfile.FastGFile(self.output_labels, 'w') as f:
+                    f.write('\n'.join(image_lists.keys()) + '\n')
+                self.label_size = len(image_lists.keys())
+                with gfile.FastGFile(self.main_path+'/label_size.txt', 'w') as f:
+                    f.write(str(self.label_size))
+
+            saver.save(sess, self.check_point_path+'/inception.ckpt', global_step=global_step)
+
+    def predict(self, predict_images):
+        label_data = []
+        result = []
+        with gfile.FastGFile(self.output_labels, 'r') as f:
+            label_data = str(f.read()).split('\n')
+
+        # Gather information about the model architecture we'll be using.
+        model_info = self.create_model_info(self.architecture)
+        if not model_info:
+            tf.logging.error('Did not recognize architecture flag')
+            return -1
+
+        # Set up the pre-trained graph.
+        self.maybe_download_and_extract(model_info['data_url'])
+
+        graph, bottleneck_tensor, resized_image_tensor = (self.create_model_graph(model_info))
+
+        with tf.Session(graph=graph) as sess:
+            # Set up the image decoding sub-graph.
+            jpeg_data_tensor, decoded_image_tensor = self.add_jpeg_decoding(
+                model_info['input_width'], model_info['input_height'],
+                model_info['input_depth'], model_info['input_mean'],
+                model_info['input_std'])
+
+            # Add the new layer that we'll be training.
+            (train_step, cross_entropy, bottleneck_input, ground_truth_input, final_tensor, global_step) = self.add_final_training_ops(
+                self.label_size, self.final_tensor_name, bottleneck_tensor,
+                model_info['bottleneck_tensor_size'], model_info['quantize_layer'])
+
+            # Create the operations we need to evaluate the accuracy of our new layer.
+            evaluation_step, prediction = self.add_evaluation_step(
+                final_tensor, ground_truth_input)
+
+            # Set up all our weights to their initial default values.
+            check_point = tf.train.get_checkpoint_state(self.check_point_path)
+            saver = tf.train.Saver(tf.global_variables())
+            if check_point and tf.train.checkpoint_exists(check_point.model_checkpoint_path):
+                saver.restore(sess, check_point.model_checkpoint_path)
+            else:
+                sess.run(tf.global_variables_initializer())
+
+            predict_input_list = []
+
+            for image in predict_images:
+                req = urllib.request.Request(image)
+                response = urllib.request.urlopen(req)
+                image_data = response.read()
+                predict_input_list.append(self.run_bottleneck_on_image(
+                    sess, image_data, jpeg_data_tensor, decoded_image_tensor,
+                    resized_image_tensor, bottleneck_tensor))
+
+            predictions = sess.run(prediction, feed_dict={bottleneck_input: predict_input_list})
+
+            print(predict_images)
+            print(predictions)
+
+            result = []
+            for i in range(len(predictions)):
+                print(str(predict_images[i]) , '->', str(label_data[predictions[i]]))
+                result.append(label_data[predictions[i]])
+        return result
 
 
-# if __name__ == '__main__':
-#     parser = argparse.ArgumentParser()
-#     parser.add_argument(
-#         '--image_dir',
-#         type=str,
-#         default='',
-#         help='Path to folders of labeled images.'
-#     )
-#     parser.add_argument(
-#         '--output_graph',
-#         type=str,
-#         default='/tmp/output_graph.pb',
-#         help='Where to save the trained graph.'
-#     )
-#     parser.add_argument(
-#         '--intermediate_output_graphs_dir',
-#         type=str,
-#         default='/tmp/intermediate_graph/',
-#         help='Where to save the intermediate graphs.'
-#     )
-#     parser.add_argument(
-#         '--intermediate_store_frequency',
-#         type=int,
-#         default=0,
-#         help="""\
-#         How many steps to store intermediate graph. If "0" then will not
-#         store.\
-#     """
-#     )
-#     parser.add_argument(
-#         '--output_labels',
-#         type=str,
-#         default='/tmp/output_labels.txt',
-#         help='Where to save the trained graph\'s labels.'
-#     )
-#     parser.add_argument(
-#         '--summaries_dir',
-#         type=str,
-#         default='/tmp/retrain_logs',
-#         help='Where to save summary logs for TensorBoard.'
-#     )
-#     parser.add_argument(
-#         '--how_many_training_steps',
-#         type=int,
-#         default=4000,
-#         help='How many training steps to run before ending.'
-#     )
-#     parser.add_argument(
-#         '--learning_rate',
-#         type=float,
-#         default=0.01,
-#         help='How large a learning rate to use when training.'
-#     )
-#     parser.add_argument(
-#         '--testing_percentage',
-#         type=int,
-#         default=10,
-#         help='What percentage of images to use as a test set.'
-#     )
-#     parser.add_argument(
-#         '--validation_percentage',
-#         type=int,
-#         default=10,
-#         help='What percentage of images to use as a validation set.'
-#     )
-#     parser.add_argument(
-#         '--eval_step_interval',
-#         type=int,
-#         default=10,
-#         help='How often to evaluate the training results.'
-#     )
-#     parser.add_argument(
-#         '--train_batch_size',
-#         type=int,
-#         default=100,
-#         help='How many images to train on at a time.'
-#     )
-#     parser.add_argument(
-#         '--test_batch_size',
-#         type=int,
-#         default=-1,
-#         help="""\
-#         How many images to test on. This test set is only used once, to evaluate
-#         the final accuracy of the model after training completes.
-#         A value of -1 causes the entire test set to be used, which leads to more
-#         stable results across runs.\
-#         """
-#     )
-#     parser.add_argument(
-#         '--validation_batch_size',
-#         type=int,
-#         default=100,
-#         help="""\
-#         How many images to use in an evaluation batch. This validation set is
-#         used much more often than the test set, and is an early indicator of how
-#         accurate the model is during training.
-#         A value of -1 causes the entire validation set to be used, which leads to
-#         more stable results across training iterations, but may be slower on large
-#         training sets.\
-#         """
-#     )
-#     parser.add_argument(
-#         '--print_misclassified_test_images',
-#         default=False,
-#         help="""\
-#         Whether to print out a list of all misclassified test images.\
-#         """,
-#         action='store_true'
-#     )
-#     parser.add_argument(
-#         '--model_dir',
-#         type=str,
-#         default='/tmp/imagenet',
-#         help="""\
-#         Path to classify_image_graph_def.pb,
-#         imagenet_synset_to_human_label_map.txt, and
-#         imagenet_2012_challenge_label_map_proto.pbtxt.\
-#         """
-#     )
-#     parser.add_argument(
-#         '--bottleneck_dir',
-#         type=str,
-#         default='/tmp/bottleneck',
-#         help='Path to cache bottleneck layer values as files.'
-#     )
-#     parser.add_argument(
-#         '--final_tensor_name',
-#         type=str,
-#         default='final_result',
-#         help="""\
-#         The name of the output classification layer in the retrained graph.\
-#         """
-#     )
-#     parser.add_argument(
-#         '--flip_left_right',
-#         default=False,
-#         help="""\
-#         Whether to randomly flip half of the training images horizontally.\
-#         """,
-#         action='store_true'
-#     )
-#     parser.add_argument(
-#         '--random_crop',
-#         type=int,
-#         default=0,
-#         help="""\
-#         A percentage determining how much of a margin to randomly crop off the training images.\
-#         """
-#     )
-#     parser.add_argument(
-#         '--random_scale',
-#         type=int,
-#         default=0,
-#         help="""\
-#         A percentage determining how much to randomly scale up the size of the training images by.\
-#         """
-#     )
-#     parser.add_argument(
-#         '--random_brightness',
-#         type=int,
-#         default=0,
-#         help="""\
-#         A percentage determining how much to randomly multiply the training image input pixels up or down by.\
-#         """
-#     )
-#     parser.add_argument(
-#         '--architecture',
-#         type=str,
-#         default='inception_v3',
-#         help="""\
-#         Which model architecture to use. 'inception_v3' is the most accurate, but
-#         also the slowest. For faster or smaller models, chose a MobileNet with the
-#         form 'mobilenet_<parameter size>_<input_size>[_quantized]'. For example,
-#         'mobilenet_1.0_224' will pick a model that is 17 MB in size and takes 224
-#         pixel input images, while 'mobilenet_0.25_128_quantized' will choose a much
-#         less accurate, but smaller and faster network that's 920 KB on disk and
-#         takes 128x128 images. See https://research.googleblog.com/2017/06/mobilenets-open-source-models-for.html
-#         for more information on Mobilenet.\
-#         """)
-#     FLAGS, unparsed = parser.parse_known_args()
-#     print(FLAGS)
-    # tf.app.run(main=main, argv=[sys.argv[0]] + unparsed)
+    def init_data(self):
+        # Needed to make sure the logging output is visible.
+        #  See https://github.com/tensorflow/tensorflow/issues/3047
+        tf.logging.set_verbosity(tf.logging.INFO)
+
+        # Prepare necessary directories that can be used during training
+        # 기존 데이터 삭제
+        self.prepare_file_system()
+
+        # 모델이 없는 경우 모델 다운로드
+        self.init_model()
+
+        # 테스트시 사용할 이미지 데이터 조회
+        # 대량 테스트를 위해서 추후 DB연결로 변경
+        print('data load')
+        train_image_data = {}
+        try:
+            with open("./trainlist_15253_check.txt", 'r') as f:
+                while True:
+                    line = f.readline()
+                    if not line: break
+                    line = line.replace('\n','')
+                    line = line.replace(' ', '')
+                    key, value = line.split('\t')
+
+                    # try:
+                    #     urllib.request.urlopen(value)
+                    # except Exception:
+                    #     print('trainlist invalid url', value)
+                    #     continue
+
+                    train_image_data[value] = key
+                    if len(train_image_data) % 100 == 0:
+                        print('train process in', str(len(train_image_data)))
+        except FileNotFoundError:
+            return -1
+
+        test_image_data = {}
+        try:
+            with open("./testlist_15253_check.txt", 'r') as f:
+                while True:
+                    line = f.readline()
+                    if not line: break
+                    line = line.replace('\n', '')
+                    line = line.replace(' ', '')
+                    key, value = line.split('\t')
+
+                    # try:
+                    #     urllib.request.urlopen(value)
+                    # except Exception:
+                    #     print('testlist invalid url', value)
+                    #     continue
+
+                    test_image_data[value] = key
+                    if len(test_image_data) % 100 == 0:
+                        print('test process in', str(len(test_image_data)))
+        except FileNotFoundError:
+            return -1
+
+        validation_image_data = {}
+        try:
+            with open("./validlist_15253_check.txt", 'r') as f:
+                while True:
+                    line = f.readline()
+                    if not line: break
+                    line = line.replace('\n', '')
+                    line = line.replace(' ', '')
+                    key, value = line.split('\t')
+
+                    # try:
+                    #     urllib.request.urlopen(value)
+                    # except Exception:
+                    #     print('validlist invalid url', value)
+                    #     continue
+
+                    validation_image_data[value] = key
+                    if len(validation_image_data) % 100 == 0:
+                        print('valid process in', str(len(validation_image_data)))
+        except FileNotFoundError:
+            return -1
+
+        # Look at the folder structure, and create lists of all the images.
+        image_lists = self.create_image_lists(train_image_data, test_image_data, validation_image_data)
+
+        self.train(image_lists, True)
