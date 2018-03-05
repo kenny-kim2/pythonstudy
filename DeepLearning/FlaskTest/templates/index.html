@@ -67,217 +67,124 @@
 	<div class="main main-raised">
 		<div class="section section-basic">
 	    	<div class="container">
-	            <div class="title">
-	                <h2><b>이미지 기반 상품링크<b></h2>
-					<h4>학습 수량: 400,000</h4>
-	            </div>
-
-				<div id="prod_list">
-					<div class="row" >
-						<div class="col-sm-2">
-							<a data-toggle="modal" data-target="#myModal">
-								<img src="http://i.011st.com/t/300/pd/17/7/8/6/8/7/0/zUvoE/1406786870_B.jpg" alt="Rounded Image" class="img-rounded img-responsive">
-								<h4>링크 예상 수량</h4>
-							</a>
-						</div>
-						<div class="col-sm-2">
-							<a data-toggle="modal" data-target="#myModal">
-								<img src="{{ url_for('static', filename='img/avatar.jpg') }}" alt="Rounded Image" class="img-rounded img-responsive">
-								<h4>링크 예상 수량</h4>
-							</a>
-						</div>
-						<div class="col-sm-2">
-							<a data-toggle="modal" data-target="#myModal">
-								<img src="{{ url_for('static', filename='img/avatar.jpg') }}" alt="Rounded Image" class="img-rounded img-responsive">
-								<h4>링크 예상 수량</h4>
-							</a>
-						</div>
-						<div class="col-sm-2">
-							<a data-toggle="modal" data-target="#myModal">
-								<img src="{{ url_for('static', filename='img/avatar.jpg') }}" alt="Rounded Image" class="img-rounded img-responsive">
-								<h4>링크 예상 수량</h4>
-							</a>
-						</div>
-						<div class="col-sm-2">
-							<a data-toggle="modal" data-target="#myModal">
-								<img src="{{ url_for('static', filename='img/avatar.jpg') }}" alt="Rounded Image" class="img-rounded img-responsive">
-								<h4>링크 예상 수량</h4>
-							</a>
-						</div>
-						<div class="col-sm-2">
-							<a data-toggle="modal" data-target="#myModal">
-								<img src="{{ url_for('static', filename='img/avatar.jpg') }}" alt="Rounded Image" class="img-rounded img-responsive">
-								<h4>링크 예상 수량</h4>
-							</a>
-						</div>
-					</div>
-					<div class="row">
-						<div class="col-sm-2">
-							<a data-toggle="modal" data-target="#myModal">
-								<img src="{{ url_for('static', filename='img/avatar.jpg') }}" alt="Rounded Image" class="img-rounded img-responsive">
-								<h4>링크 예상 수량</h4>
-							</a>
-						</div>
-						<div class="col-sm-2">
-							<a data-toggle="modal" data-target="#myModal">
-								<img src="{{ url_for('static', filename='img/avatar.jpg') }}" alt="Rounded Image" class="img-rounded img-responsive">
-								<h4>링크 예상 수량</h4>
-							</a>
-						</div>
-						<div class="col-sm-2">
-							<a data-toggle="modal" data-target="#myModal">
-								<img src="{{ url_for('static', filename='img/avatar.jpg') }}" alt="Rounded Image" class="img-rounded img-responsive">
-								<h4>링크 예상 수량</h4>
-							</a>
-						</div>
-						<div class="col-sm-2">
-							<a data-toggle="modal" data-target="#myModal">
-								<img src="{{ url_for('static', filename='img/avatar.jpg') }}" alt="Rounded Image" class="img-rounded img-responsive">
-								<h4>링크 예상 수량</h4>
-							</a>
-						</div>
-						<div class="col-sm-2">
-							<a data-toggle="modal" data-target="#myModal">
-								<img src="{{ url_for('static', filename='img/avatar.jpg') }}" alt="Rounded Image" class="img-rounded img-responsive">
-								<h4>링크 예상 수량</h4>
-							</a>
-						</div>
-						<div class="col-sm-2">
-							<a data-toggle="modal" data-target="#myModal">
-								<img src="{{ url_for('static', filename='img/avatar.jpg') }}" alt="Rounded Image" class="img-rounded img-responsive">
-								<h4>링크 예상 수량</h4>
-							</a>
-						</div>
-					</div>
-				</div>
 				<div class="row">
-					<center>
-						<ul class="pagination pagination-success">
-						<!--
-							color-classes: "pagination-primary", "pagination-info", "pagination-success", "pagination-warning", "pagination-danger"
-						-->
-							<li><a href="javascript:void(0);">1</a></li>
-							<li><a href="javascript:void(0);">...</a></li>
-							<li><a href="javascript:void(0);">5</a></li>
-							<li><a href="javascript:void(0);">6</a></li>
-							<li class="active"><a href="javascript:void(0);">7</a></li>
-							<li><a href="javascript:void(0);">8</a></li>
-							<li><a href="javascript:void(0);">9</a></li>
-							<li><a href="javascript:void(0);">...</a></li>
-							<li><a href="javascript:void(0);">12</a></li>
-						</ul>
-					</center>
+					<h2><b>이미지 학습</b></h2>
 				</div>
 
-				<div class="row">
-					<h2><b>실시간 예측 테스트</b></h2>
+	            <div class="row">
+					<h3><b>실시간 예측 테스트</b></h3>
 				</div>
 				<div class="row">
 					<div class="row">
 						<div class="col-sm-8">
 							<div class="form-group label-floating">
 								<label class="control-label">이미지 url</label>
-								<input type="email" class="form-control">
+								<input type="email" class="form-control" id="input_url">
 							</div>
 						</div>
 
 						<div class="col-sm-3">
 							<div class="input-group">
-								<button class="btn btn-success">predict</button>
+								<button class="btn btn-success" onclick="predictData();">predict</button>
 							</div>
 						</div>
 					</div>
 				</div>
 				<div class="row">
-					<div class="col-sm-5">
-						<img src="{{ url_for('static', filename='img/no_image.png') }}" alt="Rounded Image" class="img-rounded img-responsive">
+					<div class="col-sm-3">
+						<img src="{{ url_for('static', filename='img/no_image.png') }}" alt="Rounded Image" class="img-rounded img-responsive" id="input_image">
 						<h4>입력 이미지</h4>
 					</div>
-					<div class="col-sm-5">
-						<img src="{{ url_for('static', filename='img/no_image.png') }}" alt="Rounded Image" class="img-rounded img-responsive">
-						<h4>예측 기준상품 코드</h4>
+					<div class="col-sm-3">
+						<h4 id="category_name">카테고리 > > > ></h4>
+					</div>
+					<div class="col-sm-3">
+						<img src="{{ url_for('static', filename='img/no_image.png') }}" alt="Rounded Image" class="img-rounded img-responsive" id="output_image">
+						<h4 id="output_code">예측 기준상품 코드</h4>
 					</div>
 				</div>
 			</div>
+
+			<div class="container">
+				<div class="row">
+					<h2><b>상품 데이터 학습</b></h2>
+				</div>
+
+				<div class="row">
+					<div class="row">
+						<div class="col-sm-8">
+							<div class="form-group label-floating">
+								<label class="control-label">이미지 url</label>
+								<input type="email" class="form-control" id="input_url">
+							</div>
+						</div>
+
+						<div class="col-sm-3">
+							<div class="input-group">
+								<button class="btn btn-success" onclick="predictData();">predict</button>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+			<div class="container">
+				<br/>
+				<br/>
+				<br/>
+				<br/>
+				<br/>
+				<br/>
+				<br/>
+				<br/>
+				<br/>
+				<br/>
+				<br/>
+				<br/>
+				<br/>
+				<br/>
+				<br/>
+				<br/>
+				<br/>
+				<br/>
+				<br/>
+				<br/>
+				<br/>
+				<br/>
+				<br/>
+				<br/>
+				<br/>
+				<br/>
+				<br/>
+				<br/>
+				<br/>
+				<br/>
+				<br/>
+				<br/>
+				<br/>
+				<br/>
+				<br/>
+				<br/>
+				<br/>
+				<br/>
+				<br/>
+				<br/>
+				<br/>
+				<br/>
+				<br/>
+				<br/>
+				<br/>
+				<br/>
+				<br/>
+				<br/>
+				<br/>
+				<br/>
+				<br/>
+				<br/>
+			</div>
+
 		</div>
 	</div>
 </div>
-
-<!-- Sart Modal -->
-<div class="modal fade" id="myModal" tabindex="-1" role="dialog" aria-labelledby="myModalLabel" aria-hidden="true">
-	<div class="modal-dialog">
-		<div class="modal-content">
-			<div class="modal-header">
-				<button type="button" class="close" data-dismiss="modal" aria-hidden="true">
-					<i class="material-icons">clear</i>
-				</button>
-				<h4 class="modal-title">기준상품 코드</h4>
-			</div>
-			<div class="modal-body">
-				<div class="row">
-					<div class="col-sm-3">
-						<img src="{{ url_for('static', filename='img/avatar.jpg') }}" alt="Rounded Image" class="img-rounded img-responsive">
-						<h4>상품 코드</h4>
-					</div>
-					<div class="col-sm-3">
-						<img src="{{ url_for('static', filename='img/avatar.jpg') }}" alt="Rounded Image" class="img-rounded img-responsive">
-						<h4>상품 코드</h4>
-					</div>
-					<div class="col-sm-3">
-						<img src="{{ url_for('static', filename='img/avatar.jpg') }}" alt="Rounded Image" class="img-rounded img-responsive">
-						<h4>상품 코드</h4>
-					</div>
-					<div class="col-sm-3">
-						<img src="{{ url_for('static', filename='img/avatar.jpg') }}" alt="Rounded Image" class="img-rounded img-responsive">
-						<h4>상품 코드</h4>
-					</div>
-				</div>
-				<div class="row">
-					<div class="col-sm-3">
-						<img src="{{ url_for('static', filename='img/avatar.jpg') }}" alt="Rounded Image" class="img-rounded img-responsive">
-						<h4>상품 코드</h4>
-					</div>
-					<div class="col-sm-3">
-						<img src="{{ url_for('static', filename='img/avatar.jpg') }}" alt="Rounded Image" class="img-rounded img-responsive">
-						<h4>상품 코드</h4>
-					</div>
-					<div class="col-sm-3">
-						<img src="{{ url_for('static', filename='img/avatar.jpg') }}" alt="Rounded Image" class="img-rounded img-responsive">
-						<h4>상품 코드</h4>
-					</div>
-					<div class="col-sm-3">
-						<img src="{{ url_for('static', filename='img/avatar.jpg') }}" alt="Rounded Image" class="img-rounded img-responsive">
-						<h4>상품 코드</h4>
-					</div>
-				</div>
-
-				<div class="row">
-					<center>
-						<ul class="pagination pagination-success">
-						<!--
-							color-classes: "pagination-primary", "pagination-info", "pagination-success", "pagination-warning", "pagination-danger"
-						-->
-							<li><a href="javascript:void(0);">1</a></li>
-							<li><a href="javascript:void(0);">...</a></li>
-							<li><a href="javascript:void(0);">5</a></li>
-							<li><a href="javascript:void(0);">6</a></li>
-							<li class="active"><a href="javascript:void(0);">7</a></li>
-							<li><a href="javascript:void(0);">8</a></li>
-							<li><a href="javascript:void(0);">9</a></li>
-							<li><a href="javascript:void(0);">...</a></li>
-							<li><a href="javascript:void(0);">12</a></li>
-						</ul>
-					</center>
-				</div>
-			</div>
-			<div class="modal-footer">
-				<button type="button" class="btn btn-danger btn-simple" data-dismiss="modal">Close</button>
-			</div>
-		</div>
-	</div>
-</div>
-<!--  End Modal -->
-
 
 </body>
 	<!--   Core JS Files   -->

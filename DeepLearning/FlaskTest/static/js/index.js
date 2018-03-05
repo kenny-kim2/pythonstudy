@@ -1,50 +1,60 @@
 $().ready(function(){
-    getProductData(2);
+    // getProductData(2);
+
 });
 
-function getProductData(page) {
-    var pagedata = {};
-    pagedata['page'] = page;
+function predictData() {
+    var input_data = {};
+    input_data['image_url'] = $('#input_url').val();    
     $.ajax({
-        url:'/product',
+        url:'/predict',
         cache:false,
-        data:pagedata,
+        data:input_data,
         method:'POST',
         success:function(data){
             console.log(data);
             returndata = JSON.parse(data)
+            if(returndata['has_cate']){
+                $('#category_name').text(returndata['result_cate_text']);
+                $('#input_image').attr('src', returndata['input_url']);
+                console.log(returndata['result_prod_code'])
 
-            $('#prod_list').empty();
-            var prodstring = '';
-            var count = 0;
-            for(var key in returndata){
-                // <div class="row" >
-                //     <div class="col-sm-2">
-                //         <a data-toggle="modal" data-target="#myModal">
-                //             <img src="http://i.011st.com/t/300/pd/17/7/8/6/8/7/0/zUvoE/1406786870_B.jpg" alt="Rounded Image" class="img-rounded img-responsive">
-                //             <h4>링크 예상 수량</h4>
-                //         </a>
-                //     </div>
+                if(returndata.hasOwnProperty('result_prod_code')){
+                    if(parseInt(returndata['result_prod_code']) > 0){
+                        productCode = parseInt(returndata['result_prod_code'])
 
-                if(count % 6 == 0){
-                    prodstring += '<div class="row" >';
+                        if(productCode > 500000) {
+                            var code = ""+productCode;
+                            var codelen = code.length;
+
+                            for(var inx=code.length;inx < 6; inx++) {
+                                code="0"+code;
+                            }
+
+                            subImagePath1 = code.substring(codelen-3, codelen);
+                            subImagePath2 = code.substring(codelen-6, codelen-3);
+                            imageUrl = "http://img.danawa.com/prod_img/500000/"+subImagePath1+"/"+subImagePath2+"/img/"+productCode+"_1_80.jpg";
+                        } else {
+                            imageUrl = "http://img.danawa.com/prod_img/small/group_"+Math.floor(productCode/500)+"/"+productCode+"_1.jpg";
+                        }
+
+                        $('#output_image').attr('src', imageUrl);
+                        $('#output_code').text(productCode);
+                    } else {
+                        alert('기준상품 없음');
+                    }
+                } else {
+                    alert('기준상품 없음');
                 }
-                prodstring += ' <div class="col-sm-2">';
-                prodstring += '     <a data-toggle="modal" data-target="#myModal">';
-                prodstring += '         <img src="'+returndata[key]['img_url']+'" alt="Rounded Image" class="img-rounded img-responsive">';
-                prodstring += '         <h4>'+returndata[key]['prod_name']+'('+returndata[key]['link_cnt']+')</h4>';
-                prodstring += '     </a>';
-                prodstring += ' </div>';
-                if(count % 6 == 5){
-                    prodstring += '</div>';
-                }
-                count++;
+            } else {
+                alert('맞는 카테고리가 없습니다.');
+                $('#input_image').attr('src', returndata['input_url']);
             }
-            $('#prod_list').append(prodstring);
 
+            alet('예측 완료!');
         },
         error:function(request, status, error){
-            alert('실패');
+            alert('에러 발생');
             console.log(request);
             console.log(status);
             console.log(error);

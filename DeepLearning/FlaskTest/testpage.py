@@ -1,34 +1,57 @@
 from flask import Flask, render_template, request, json
+from InceptionCateModule import InceptionCateModule
+from InceptionProdModule import InceptionProdModule
+from tensorflow.python.platform import gfile
+
 app = Flask(__name__)
+inception_cate_module = InceptionCateModule()
+catemap = {}
+inception_prod_module = InceptionProdModule()
+
+with gfile.FastGFile('./cate.txt', 'r') as f:
+    total_data = str(f.read()).split('\n')
+    for data in total_data:
+        leafcode, cate1name, cate2name, cate3name, cate4name = data.split('\t')
+        catemap[leafcode] = cate1name+'>'+cate2name+'>'+cate3name+'>'+cate4name.replace('\r', '')
+print(catemap)
 
 @app.route('/')
 def mainPage(name=None):
     return render_template('index.html')
 
-@app.route('/product', methods=['POST'])
-def get_product_data():
+@app.route('/predict', methods=['POST'])
+def get_prod_data():
     if request.method == 'POST':
-        page = int(request.form['page'])
 
-        # 조회
-        returndata = {}
+        test_url = request.form['image_url']
+        print(test_url)
+        data = []
+        data.append(test_url)
 
-        for i in range(12):
-            returndata[str(i)] = {}
-            returndata[str(i)]['img_url'] = 'http://i.011st.com/t/300/pd/17/7/8/6/8/7/0/zUvoE/1406786870_B.jpg'
-            returndata[str(i)]['link_cnt'] = 10
-            returndata[str(i)]['prod_name'] = 'test'+str(i)
+        result = inception_cate_module.predict(data)
+        return_data = {}
+        print(result)
+        if int(result[0]) > 0:
+            return_data['has_cate'] = True
+            return_data['result_cate'] = result[0]
+            return_data['input_url'] = test_url
+            return_data['result_cate_text'] = catemap[result[0]]
 
-        print(returndata)
+            # if '쥬얼리' in catemap[result[0]]:
+            #     print('쥬얼리 카테고리!')
+            #     result_prod = inception_prod_module.predict(data)
+            #     return_data['result_prod_code'] = result_prod[0]
+            print('쥬얼리 카테고리!')
+            result_prod = inception_prod_module.predict(data)
+            return_data['result_prod_code'] = result_prod[0]
+        else:
+            return_data['has_cate'] = False
+            return_data['input_url'] = test_url
 
-        return json.dumps(returndata)
+        return json.dumps(return_data)
 
 @app.route('/product/detail')
 def get_product_data_detail():
-    pass
-
-@app.route('/predict', methods=['POST'])
-def predict_data():
     pass
 
 if __name__ == '__main__':
