@@ -1,0 +1,49 @@
+{% extends "layout/base.html" %}
+{% block title %}
+Predict Something
+{% endblock %}
+{% block content %}
+            <div class="content">
+                <div class="container-fluid">
+                    <div class="row">
+                        <div class="col-md-10">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h4 class="card-title">이미지 처리 테스트</h4>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <div class="card card-user">
+                                                <div class="card-body">
+                                                    <img class="img-fluid" src="{{ url_for('static', filename='img/no_image.png')}}" id="input_image">
+                                                    <h5 class="title" id="category_name">카테고리 정보</h5>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="card card-user">
+                                                <div class="card-body">
+                                                    <img class="img-fluid" src="{{ url_for('static', filename='img/no_image.png')}}" id="output_image">
+                                                    <h5 class="title" id="output_code">기준상품 코드</h5>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="row">
+                                        <div class="col-md-12 pr-1">
+                                            <div class="form-group">
+                                                <label>이미지 url</label>
+                                                <input type="text" class="form-control" placeholder="이미지 url" value="" id="input_url">
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <button class="btn btn-info btn-fill pull-right" onclick="predictData();">실행</button>
+                                    <div class="clearfix"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+{% endblock %}
