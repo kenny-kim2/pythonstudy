@@ -119,6 +119,8 @@ class DeepCNModule:
         print('img vocab = ', str(len(self.vocab['img'])))
 
     def make_model(self):
+
+
         pass
 
     def train(self):

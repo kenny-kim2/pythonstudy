@@ -5,9 +5,10 @@ $().ready(function(){
 
 function predictData() {
     var input_data = {};
-    input_data['image_url'] = $('#input_url').val();    
+    input_data['image_url'] = $('#input_url').val();
+    wrapWindowByMask();
     $.ajax({
-        url:'/predict',
+        url:'/test',
         cache:false,
         data:input_data,
         method:'POST',
@@ -50,14 +51,38 @@ function predictData() {
                 alert('맞는 카테고리가 없습니다.');
                 $('#input_image').attr('src', returndata['input_url']);
             }
-
-            alet('예측 완료!');
+            closeMask();
         },
         error:function(request, status, error){
             alert('에러 발생');
             console.log(request);
             console.log(status);
             console.log(error);
+            closeMask();
         }
-    })
+    });
+}
+
+function wrapWindowByMask(){
+    //화면의 높이와 너비를 구한다.
+    var maskHeight = $(document).height();
+    var maskWidth = $(window).width();
+    $('#mask').show();
+
+    //마스크의 높이와 너비를 화면 것으로 만들어 전체 화면을 채운다.
+    $('#mask').css({'width':maskWidth,'height':maskHeight});
+
+    var top = maskHeight/2 - $('#mask_img').height();
+    var left = maskWidth/2 - $('#mask_img').width();
+
+    $('#mask_img').css({'position':'absolute'});
+    $('#mask_img').css({'top':top,'left':left});
+
+    //애니메이션 효과
+    $('#mask').fadeIn(1000);
+    $('#mask').fadeTo("slow",0.8);
+}
+
+function closeMask(){
+    $('#mask, .window').hide();
 }
